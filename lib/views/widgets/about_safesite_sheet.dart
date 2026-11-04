@@ -435,7 +435,7 @@ class AboutSafeSiteScreen extends ConsumerWidget {
                         "AGPL-3.0 and Enterprise License options for on-device AI.",
                     onTap: () => _launchExternalUrl(
                       context,
-                      "https://github.com/shivamkoffeekodes9084/safesite_ai_app/blob/main/README.md",
+                      "https://github.com/shivamkoffeekodes9084/safesite_ai_app#licensing",
                     ),
                   ),
 
