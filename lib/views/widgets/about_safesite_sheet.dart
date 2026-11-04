@@ -60,8 +60,10 @@ class AboutSafeSiteScreen extends ConsumerWidget {
                       color: Colors.white,
                       size: 26,
                     ),
+                    splashColor: Colors.transparent,
+                    highlightColor: Colors.transparent,
+                    hoverColor: Colors.transparent,
                     onPressed: () => Navigator.pop(context),
-                    splashRadius: 22,
                   ),
                   const SizedBox(width: 8),
                   const Text(
@@ -82,7 +84,7 @@ class AboutSafeSiteScreen extends ConsumerWidget {
             // 2. Scrollable Content (100% Fullscreen, Edge-to-Edge)
             Expanded(
               child: ListView(
-                physics: const BouncingScrollPhysics(),
+                physics: const ClampingScrollPhysics(),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 24,
                   vertical: 20,
@@ -208,7 +210,8 @@ class AboutSafeSiteScreen extends ConsumerWidget {
                           width: isActive ? 1.2 : 0.8,
                         ),
                       ),
-                      child: InkWell(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
                         onTap: () {
                           ref
                               .read(modelManagerProvider.notifier)
@@ -477,9 +480,9 @@ class AboutSafeSiteScreen extends ConsumerWidget {
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 18),
-      child: InkWell(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

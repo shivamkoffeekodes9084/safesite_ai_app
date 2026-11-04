@@ -358,13 +358,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final picked = await picker.pickImage(source: ImageSource.gallery);
     if (picked != null) {
       if (!mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => PhotoDetectionViewerScreen(
-            photoFile: File(picked.path),
+      final wasPaused = _isDetectionPaused;
+      _isDetectionPaused = true;
+      try {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => PhotoDetectionViewerScreen(
+              photoFile: File(picked.path),
+            ),
           ),
-        ),
-      );
+        );
+      } finally {
+        if (mounted && !wasPaused) {
+          _isDetectionPaused = false;
+          _startLiveInferenceLoop();
+        }
+      }
     }
   }
 
@@ -376,21 +385,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
     if (picked != null) {
       if (!mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => CctvVideoPlayerScreen(
-            videoFile: File(picked.path),
+      final wasPaused = _isDetectionPaused;
+      _isDetectionPaused = true;
+      try {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => CctvVideoPlayerScreen(
+              videoFile: File(picked.path),
+            ),
           ),
-        ),
-      );
+        );
+      } finally {
+        if (mounted && !wasPaused) {
+          _isDetectionPaused = false;
+          _startLiveInferenceLoop();
+        }
+      }
     }
   }
 
   // ----------------------------------------------------------------------------
   // Bottom Modal Sheets: About SafeSite AI (Matches Image 2)
   // ----------------------------------------------------------------------------
-  void _showInfoAndSettingsSheet() {
-    AboutSafeSiteSheet.show(context);
+  Future<void> _showInfoAndSettingsSheet() async {
+    final wasPaused = _isDetectionPaused;
+    _isDetectionPaused = true;
+    try {
+      await AboutSafeSiteSheet.show(context);
+    } finally {
+      if (mounted && !wasPaused) {
+        _isDetectionPaused = false;
+        _startLiveInferenceLoop();
+      }
+    }
   }
 
   // ----------------------------------------------------------------------------
