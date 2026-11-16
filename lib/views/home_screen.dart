@@ -86,6 +86,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   // ByteTrack Tracking for Live Feed
   final SimpleByteTracker _videoTracker = SimpleByteTracker();
+  StateSetter? _safetySheetSetState;
 
   // ----------------------------------------------------------------------------
   // Top Header State: Navigation Tabs (Matches Screenshot)
@@ -218,17 +219,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
             final tracked = _videoTracker.update(result.detections);
 
-            setState(() {
-              _liveDetections = tracked;
-              _liveSummaryCounts = result.summaryCounts;
-              _livePeopleCount = result.effectivePeopleCount;
-              _liveCompliance = result.compliance;
-              _frameWidth = result.imageWidth ?? 480.0;
-              _frameHeight = result.imageHeight ?? 640.0;
-              _fps = calculatedFps;
-              _latencyMs = latency.toDouble();
-              _inferenceMs = result.inferenceMs ?? 18.0;
-            });
+            if (mounted) {
+              setState(() {
+                _liveDetections = tracked;
+                _liveSummaryCounts = result.summaryCounts;
+                _livePeopleCount = result.effectivePeopleCount;
+                _liveCompliance = result.compliance;
+                _frameWidth = result.imageWidth ?? 480.0;
+                _frameHeight = result.imageHeight ?? 640.0;
+                _fps = calculatedFps;
+                _latencyMs = latency.toDouble();
+                _inferenceMs = result.inferenceMs ?? 18.0;
+              });
+              _safetySheetSetState?.call(() {});
+            }
           }
 
           try {
@@ -815,18 +819,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   // Bottom Modal Sheet: Live AI Safety & Vision Breakdown Dashboard
   // ----------------------------------------------------------------------------
   void _showLiveSafetyDashboardSheet() {
-    final violations = _liveViolationCount;
-    final people = _livePeopleCount;
-    final hardhats = _getCount('Hardhat');
-    final vests = _getCount('Safety Vest');
-    final masks = _getCount('Mask');
-    final machinery = _getCount('machinery') + _getCount('vehicle');
-    final cones = _getCount('Safety Cone');
-    final isViolation = violations > 0;
-    final totalObjects = _liveDetections.length;
-    final score = _liveCompliance?.complianceScorePercent ??
-        (isViolation ? 50.0 : (people > 0 ? 100.0 : 100.0));
-
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF13151F),
@@ -834,203 +826,293 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Top drag bar
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            _safetySheetSetState = setSheetState;
 
-              // Header Row
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(7),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF00B0FF).withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.shield_outlined,
-                      color: Color(0xFF00B0FF),
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Live Computer Vision AI",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
+            final violations = _liveViolationCount;
+            final people = _livePeopleCount;
+            final hardhats = _getCount('Hardhat');
+            final vests = _getCount('Safety Vest');
+            final masks = _getCount('Mask');
+            final machinery = _getCount('machinery') + _getCount('vehicle');
+            final cones = _getCount('Safety Cone');
+            final isViolation = violations > 0;
+            final totalObjects = _liveDetections.length;
+            final score = _liveCompliance?.complianceScorePercent ??
+                (isViolation ? 0.0 : (people > 0 ? 100.0 : 100.0));
+
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Top drag bar
+                      Center(
+                        child: Container(
+                          width: 36,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.white24,
+                            borderRadius: BorderRadius.circular(2),
                           ),
                         ),
-                        Text(
-                          "Real-time object detection & safety monitoring",
-                          style: TextStyle(
-                            color: Colors.white60,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(
-                      Icons.close_rounded,
-                      color: Colors.white54,
-                      size: 20,
-                    ),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
+                      ),
+                      const SizedBox(height: 16),
 
-              // 1. Overall Compliance Status Card
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: isViolation
-                      ? const Color(0xFFEF4444).withValues(alpha: 0.12)
-                      : const Color(0xFF10B981).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isViolation
-                        ? const Color(0xFFEF4444).withValues(alpha: 0.4)
-                        : const Color(0xFF10B981).withValues(alpha: 0.4),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      isViolation
-                          ? Icons.warning_amber_rounded
-                          : Icons.check_circle_outline_rounded,
-                      color: isViolation
-                          ? const Color(0xFFEF4444)
-                          : const Color(0xFF10B981),
-                      size: 26,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      // Header Row
+                      Row(
                         children: [
-                          Text(
-                            isViolation
-                                ? "SAFETY ALERT: $violations VIOLATION(S) (${score.toStringAsFixed(0)}%)"
-                                : (people > 0
-                                    ? "SITE COMPLIANT: ALL SAFE (${score.toStringAsFixed(0)}%)"
-                                    : "SCANNING ACTIVE AREA"),
-                            style: TextStyle(
-                              color: isViolation
-                                  ? const Color(0xFFEF4444)
-                                  : const Color(0xFF10B981),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
+                          Container(
+                            padding: const EdgeInsets.all(7),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF00B0FF).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(
+                              Icons.shield_outlined,
+                              color: Color(0xFF00B0FF),
+                              size: 20,
                             ),
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            isViolation
-                                ? "Worker missing required PPE gear (Hardhat/Vest)"
-                                : (people > 0
-                                    ? "All detected workers meet safety compliance requirements."
-                                    : "Point camera towards workers or site area to track."),
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 11,
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Live Computer Vision AI",
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Text(
+                                  "Real-time object detection & safety monitoring",
+                                  style: TextStyle(
+                                    color: Colors.white60,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
                             ),
+                          ),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.close_rounded,
+                              color: Colors.white54,
+                              size: 20,
+                            ),
+                            splashColor: Colors.transparent,
+                            highlightColor: Colors.transparent,
+                            onPressed: () => Navigator.pop(ctx),
                           ),
                         ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 16),
+
+                      // 1. Overall Compliance Status Card
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: isViolation
+                              ? const Color(0xFFEF4444).withValues(alpha: 0.12)
+                              : (people > 0
+                                  ? const Color(0xFF10B981).withValues(alpha: 0.12)
+                                  : const Color(0xFF3B82F6).withValues(alpha: 0.10)),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isViolation
+                                ? const Color(0xFFEF4444).withValues(alpha: 0.4)
+                                : (people > 0
+                                    ? const Color(0xFF10B981).withValues(alpha: 0.4)
+                                    : const Color(0xFF3B82F6).withValues(alpha: 0.3)),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              isViolation
+                                  ? Icons.warning_amber_rounded
+                                  : (people > 0
+                                      ? Icons.check_circle_outline_rounded
+                                      : Icons.radar_rounded),
+                              color: isViolation
+                                  ? const Color(0xFFEF4444)
+                                  : (people > 0
+                                      ? const Color(0xFF10B981)
+                                      : const Color(0xFF60A5FA)),
+                              size: 26,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          isViolation
+                                              ? "SAFETY ALERT: $violations VIOLATION${violations > 1 ? 'S' : ''}"
+                                              : (people > 0
+                                                  ? "SITE COMPLIANT: ALL SAFE"
+                                                  : "SCANNING ACTIVE AREA"),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: isViolation
+                                                ? const Color(0xFFEF4444)
+                                                : (people > 0
+                                                    ? const Color(0xFF10B981)
+                                                    : const Color(0xFF60A5FA)),
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: 0.2,
+                                          ),
+                                        ),
+                                      ),
+                                      if (people > 0 || isViolation) ...[
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 7,
+                                            vertical: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: isViolation
+                                                ? const Color(0xFFEF4444).withValues(alpha: 0.25)
+                                                : const Color(0xFF10B981).withValues(alpha: 0.25),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            "${score.toStringAsFixed(0)}% Safe",
+                                            style: TextStyle(
+                                              color: isViolation
+                                                  ? const Color(0xFFFCA5A5)
+                                                  : const Color(0xFF6EE7B7),
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    isViolation
+                                        ? "Worker missing required PPE gear (Hardhat/Vest)"
+                                        : (people > 0
+                                            ? "All detected workers meet safety compliance requirements."
+                                            : "Point camera towards workers or site area to track."),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 11,
+                                      height: 1.25,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // 2. Metrics Grid: People Counting & Vision AI
+                      Row(
+                        children: [
+                          _buildMetricStatCard(
+                            title: "Live People",
+                            value: "$people",
+                            subtitle: "in camera view",
+                            icon: Icons.groups_rounded,
+                            color: const Color(0xFFFACC15),
+                          ),
+                          const SizedBox(width: 8),
+                          _buildMetricStatCard(
+                            title: "Total Objects",
+                            value: "$totalObjects",
+                            subtitle: "actively detected",
+                            icon: Icons.category_rounded,
+                            color: const Color(0xFF00E5FF),
+                          ),
+                          const SizedBox(width: 8),
+                          _buildMetricStatCard(
+                            title: "Inference",
+                            value: "${_fps.toStringAsFixed(1)} FPS",
+                            subtitle: "${_inferenceMs.toStringAsFixed(0)}ms ONNX",
+                            icon: Icons.speed_rounded,
+                            color: const Color(0xFFA855F7),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // 3. PPE Safety Monitoring Breakdown Chips
+                      const Text(
+                        "PPE & SAFETY BREAKDOWN",
+                        style: TextStyle(
+                          color: Colors.white54,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _buildItemChip("⛑️ Hardhats", hardhats, const Color(0xFFA855F7)),
+                          _buildItemChip("🦺 Safety Vests", vests, const Color(0xFF10B981)),
+                          if (masks > 0)
+                            _buildItemChip("😷 Masks", masks, const Color(0xFF06B6D4)),
+                          if (machinery > 0)
+                            _buildItemChip("🚜 Machinery", machinery, const Color(0xFFF59E0B)),
+                          if (cones > 0)
+                            _buildItemChip("⚠️ Cones", cones, const Color(0xFFF97316)),
+                          if (violations > 0)
+                            _buildItemChip("❌ Violations", violations, const Color(0xFFEF4444)),
+                          if (violations == 0 && hardhats == 0 && vests == 0 && people == 0)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.05),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.white12),
+                              ),
+                              child: const Text(
+                                "🔍 Waiting for objects in frame...",
+                                style: TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 16),
-
-              // 2. Metrics Grid: People Counting & Vision AI
-              Row(
-                children: [
-                  _buildMetricStatCard(
-                    title: "Live People",
-                    value: "$people",
-                    subtitle: "in camera view",
-                    icon: Icons.groups_rounded,
-                    color: const Color(0xFFFACC15),
-                  ),
-                  const SizedBox(width: 10),
-                  _buildMetricStatCard(
-                    title: "Total Objects",
-                    value: "$totalObjects",
-                    subtitle: "actively detected",
-                    icon: Icons.category_rounded,
-                    color: const Color(0xFF00E5FF),
-                  ),
-                  const SizedBox(width: 10),
-                  _buildMetricStatCard(
-                    title: "Inference Speed",
-                    value: "${_fps.toStringAsFixed(1)} FPS",
-                    subtitle: "${_inferenceMs.toStringAsFixed(0)}ms ONNX",
-                    icon: Icons.speed_rounded,
-                    color: const Color(0xFFA855F7),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // 3. PPE Safety Monitoring Breakdown Chips
-              const Text(
-                "PPE & SAFETY BREAKDOWN",
-                style: TextStyle(
-                  color: Colors.white54,
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.0,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _buildItemChip("⛑️ Hardhats", hardhats, const Color(0xFFA855F7)),
-                  _buildItemChip("🦺 Safety Vests", vests, const Color(0xFF10B981)),
-                  if (masks > 0)
-                    _buildItemChip("😷 Masks", masks, const Color(0xFF06B6D4)),
-                  if (machinery > 0)
-                    _buildItemChip("🚜 Machinery", machinery, const Color(0xFFF59E0B)),
-                  if (cones > 0)
-                    _buildItemChip("⚠️ Cones", cones, const Color(0xFFF97316)),
-                  if (violations > 0)
-                    _buildItemChip("❌ Violations", violations, const Color(0xFFEF4444)),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+            );
+          },
+        );
+      },
+    ).whenComplete(() {
+      _safetySheetSetState = null;
+    });
   }
 
   Widget _buildMetricStatCard({
@@ -1042,7 +1124,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(10),
@@ -1053,30 +1135,41 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           children: [
             Row(
               children: [
-                Icon(icon, size: 14, color: color),
+                Icon(icon, size: 13, color: color),
                 const SizedBox(width: 4),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white60,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w600,
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 6),
-            Text(
-              value,
-              style: TextStyle(
-                color: color,
-                fontSize: 17,
-                fontWeight: FontWeight.bold,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                value,
+                maxLines: 1,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 16.5,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
             const SizedBox(height: 2),
             Text(
               subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: Colors.white38,
                 fontSize: 9.5,
@@ -1109,15 +1202,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
           const SizedBox(width: 6),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
             decoration: BoxDecoration(
               color: color,
               borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
               "$count",
-              style: const TextStyle(
-                color: Colors.black,
+              style: TextStyle(
+                color: color.computeLuminance() > 0.4 ? Colors.black : Colors.white,
                 fontSize: 11,
                 fontWeight: FontWeight.w900,
               ),
